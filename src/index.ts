@@ -14,41 +14,21 @@
  * limitations under the License.
  */
 
-import {
-  endGroup,
-  getInput,
-  setFailed,
-  setOutput,
-  startGroup,
-} from "@actions/core";
+import { endGroup, getInput, setFailed, startGroup } from "@actions/core";
 import { context, getOctokit } from "@actions/github";
 import { existsSync } from "fs";
 import { createCheck } from "./createCheck";
 import { createGacFile } from "./createGACFile";
-import {
-  deployPreview,
-  deployProductionSite,
-  ErrorResult,
-  interpretChannelDeployResult,
-} from "./deploy";
-import { getChannelId } from "./getChannelId";
-import {
-  getURLsMarkdownFromChannelDeployResult,
-  postChannelSuccessComment,
-} from "./postOrUpdateComment";
+import { deployCloudFunctions, ErrorResult } from "./deploy";
 
 // Inputs defined in action.yml
-const expires = getInput("expires");
 const projectId = getInput("projectId");
-const googleApplicationCredentials = getInput("firebaseServiceAccount", {
+const googleApplicationCredentials = getInput("serviceAccountKey", {
   required: true,
 });
-const configuredChannelId = getInput("channelId");
-const isProductionDeploy = configuredChannelId === "live";
 const token = process.env.GITHUB_TOKEN || getInput("repoToken");
 const octokit = token ? getOctokit(token) : undefined;
 const entryPoint = getInput("entryPoint");
-const target = getInput("target");
 const firebaseToolsVersion = getInput("firebaseToolsVersion");
 
 async function run() {
@@ -80,79 +60,24 @@ async function run() {
     }
     endGroup();
 
-    startGroup("Setting up CLI credentials");
+    startGroup("Setting up temporary CLI credentials");
     const gacFilename = await createGacFile(googleApplicationCredentials);
     console.log(
-      "Created a temporary file with Application Default Credentials."
+      "Created a temporary file with Application Default Credentials with the provided service account."
     );
     endGroup();
 
-    if (isProductionDeploy) {
-      startGroup("Deploying to production site");
-      const deployment = await deployProductionSite(gacFilename, {
-        projectId,
-        target,
-        firebaseToolsVersion,
-      });
-      if (deployment.status === "error") {
-        throw Error((deployment as ErrorResult).error);
-      }
-      endGroup();
-
-      const hostname = target ? `${target}.web.app` : `${projectId}.web.app`;
-      const url = `https://${hostname}/`;
-      await finish({
-        details_url: url,
-        conclusion: "success",
-        output: {
-          title: `Production deploy succeeded`,
-          summary: `[${hostname}](${url})`,
-        },
-      });
-      return;
-    }
-
-    const channelId = getChannelId(configuredChannelId, context);
-
-    startGroup(`Deploying to Firebase preview channel ${channelId}`);
-    const deployment = await deployPreview(gacFilename, {
+    startGroup("Deploying cloud functions");
+    const deployment = await deployCloudFunctions(gacFilename, {
       projectId,
-      expires,
-      channelId,
-      target,
       firebaseToolsVersion,
     });
-
     if (deployment.status === "error") {
       throw Error((deployment as ErrorResult).error);
+    } else if (deployment.status === "success") {
+      console.log("Cloud functions deployed successfully.");
     }
     endGroup();
-
-    const { expireTime, urls } = interpretChannelDeployResult(deployment);
-
-    setOutput("urls", urls);
-    setOutput("expire_time", expireTime);
-    setOutput("details_url", urls[0]);
-
-    const urlsListMarkdown =
-      urls.length === 1
-        ? `[${urls[0]}](${urls[0]})`
-        : urls.map((url) => `- [${url}](${url})`).join("\n");
-
-    if (token && isPullRequest && !!octokit) {
-      const commitId = context.payload.pull_request?.head.sha.substring(0, 7);
-
-      await postChannelSuccessComment(octokit, context, deployment, commitId);
-    }
-
-    await finish({
-      details_url: urls[0],
-      conclusion: "success",
-      output: {
-        title: `Deploy preview succeeded`,
-        summary: getURLsMarkdownFromChannelDeployResult(deployment),
-      },
-    });
   } catch (e) {
     setFailed(e.message);
 
