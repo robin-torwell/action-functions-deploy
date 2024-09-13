@@ -12,9 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-name: "Deploy to Cloud Function with Service Account key"
-description: "A GitHub Action to deploy to Firebase Functions with Service Account key"
-author: "Ousmane Mbaye (https://github.com/aronep6) and Firebase"
+name: "Deploy to Cloud Function with Service Account key and options"
+description: "A GitHub Action to deploy to Firebase Functions with Service Account key and options"
+author: "Robin Pügner (https://github.com/robin-torwell) forked from Ousmane Mbaye (https://github.com/aronep6) and Firebase"
 branding:
   icon: "globe"
   color: "blue"
