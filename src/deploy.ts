@@ -94,7 +94,7 @@ export async function deployCloudFunctions(
   const { projectId, firebaseToolsVersion } = productionDeployConfig;
 
   const deploymentText = await execWithCredentials(
-    ["deploy", "--only", "functions"],
+    ["deploy", "--only", "functions", "--force"],
     projectId,
     gacFilename,
     { firebaseToolsVersion }
